@@ -144,7 +144,10 @@ prompt_pure_preprompt_render() {
 
 	# Git branch and dirty status info.
 	typeset -gA prompt_pure_vcs_info
-	if [[ -n $prompt_pure_vcs_info[branch] ]]; then
+	if [[ -n $prompt_pure_vcs_info[worktree_root] ]]; then
+		# At worktree root (parent of worktrees), show only the worktree symbol.
+		preprompt_parts+=('%F{$prompt_pure_colors[git:worktree]}${PURE_GIT_WORKTREE_SYMBOL:-≡}%f')
+	elif [[ -n $prompt_pure_vcs_info[branch] ]]; then
 		preprompt_parts+=("%F{$git_color}"'${prompt_pure_vcs_info[branch]}'"%F{$git_dirty_color}"'${prompt_pure_git_dirty}%f')
 	fi
 	# Git action (for example, merge).
@@ -293,6 +296,23 @@ prompt_pure_async_vcs_info() {
 	info[branch]=${vcs_info_msg_0_//\%/%%}
 	info[top]=$vcs_info_msg_1_
 	info[action]=$vcs_info_msg_2_
+
+	# Detect worktree root when using relative worktree paths (git 2.25+).
+	# At a worktree root (parent of worktrees), there's no branch but it's still a git context.
+	# Detection: git-dir == git-common-dir but neither is ".git" (regular repo).
+	if [[ -z $info[branch] && -z $info[top] ]]; then
+		local git_dir git_common_dir
+		git_dir=$(command git rev-parse --git-dir 2>/dev/null)
+		git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
+
+		if [[ -n $git_dir && -n $git_common_dir ]]; then
+			# Worktree root: git_dir == git_common_dir but not ".git"
+			if [[ $git_dir == $git_common_dir && $git_dir != ".git" ]]; then
+				info[top]=$PWD
+				info[worktree_root]=1
+			fi
+		fi
+	fi
 
 	print -r - ${(@kvq)info}
 }
@@ -445,6 +465,7 @@ prompt_pure_async_tasks() {
 		unset prompt_pure_git_fetch_pattern
 		prompt_pure_vcs_info[branch]=
 		prompt_pure_vcs_info[top]=
+		prompt_pure_vcs_info[worktree_root]=
 	fi
 	unset MATCH MBEGIN MEND
 
@@ -561,10 +582,11 @@ prompt_pure_async_callback() {
 			# Git directory. Run the async refresh tasks.
 			[[ -n $info[top] ]] && [[ -z $prompt_pure_vcs_info[top] ]] && prompt_pure_async_refresh
 
-			# Always update branch, top-level and stash.
+			# Always update branch, top-level, action, and worktree_root.
 			prompt_pure_vcs_info[branch]=$info[branch]
 			prompt_pure_vcs_info[top]=$info[top]
 			prompt_pure_vcs_info[action]=$info[action]
+			prompt_pure_vcs_info[worktree_root]=$info[worktree_root]
 
 			do_render=1
 			;;
@@ -836,6 +858,7 @@ prompt_pure_setup() {
 		git:branch:cached    red
 		git:action           yellow
 		git:dirty            218
+		git:worktree         242
 		host                 242
 		path                 blue
 		prompt:error         red
