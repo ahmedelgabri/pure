@@ -279,6 +279,9 @@ prompt_pure_async_git_aliases() {
 prompt_pure_async_vcs_info() {
 	setopt localoptions noshwordsplit
 
+	# Receive cached values from previous run.
+	local prev_top=$1 prev_worktree_root=$2
+
 	# Configure `vcs_info` inside an async task. This frees up `vcs_info`
 	# to be used or configured as the user pleases.
 	zstyle ':vcs_info:*' enable git
@@ -301,20 +304,27 @@ prompt_pure_async_vcs_info() {
 	# At a worktree root (parent of worktrees), we want to show a symbol instead of branch.
 	# Detection: bare repo where git-dir == git-common-dir but neither is ".git" (regular repo).
 	# Note: vcs_info may still return the bare repo's HEAD branch, so we check regardless.
-	# Optimization: check is_bare first (cheap), only run other checks if needed.
-	local is_bare
-	is_bare=$(command git rev-parse --is-bare-repository 2>/dev/null)
+	# Optimization: use cached value if git context (top) hasn't changed.
+	if [[ -n $prev_top && $info[top] == $prev_top && -n $prev_worktree_root ]]; then
+		# Same git context with known worktree root - use cached value.
+		info[branch]=
+		info[worktree_root]=1
+	else
+		# Check if this is a worktree root. Only run if is_bare (cheap check first).
+		local is_bare
+		is_bare=$(command git rev-parse --is-bare-repository 2>/dev/null)
 
-	if [[ $is_bare == "true" ]]; then
-		local git_dir git_common_dir
-		git_dir=$(command git rev-parse --git-dir 2>/dev/null)
-		git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
+		if [[ $is_bare == "true" ]]; then
+			local git_dir git_common_dir
+			git_dir=$(command git rev-parse --git-dir 2>/dev/null)
+			git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
 
-		# Worktree root: git_dir == git_common_dir but not ".git"
-		if [[ -n $git_dir && $git_dir == $git_common_dir && $git_dir != ".git" ]]; then
-			info[top]=$PWD
-			info[branch]=
-			info[worktree_root]=1
+			# Worktree root: git_dir == git_common_dir but not ".git"
+			if [[ -n $git_dir && $git_dir == $git_common_dir && $git_dir != ".git" ]]; then
+				info[top]=$PWD
+				info[branch]=
+				info[worktree_root]=1
+			fi
 		fi
 	fi
 
@@ -473,7 +483,8 @@ prompt_pure_async_tasks() {
 	fi
 	unset MATCH MBEGIN MEND
 
-	async_job "prompt_pure" prompt_pure_async_vcs_info
+	# Pass previous top and worktree_root to async worker for caching.
+	async_job "prompt_pure" prompt_pure_async_vcs_info "$prompt_pure_vcs_info[top]" "$prompt_pure_vcs_info[worktree_root]"
 
 	# Only perform tasks inside a Git working tree.
 	[[ -n $prompt_pure_vcs_info[top] ]] || return
