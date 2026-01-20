@@ -300,7 +300,7 @@ prompt_pure_async_vcs_info() {
 	# Detect worktree root when using relative worktree paths (git 2.25+).
 	# At a worktree root (parent of worktrees), there's no branch but it's still a git context.
 	# Detection: bare repo where git-dir == git-common-dir but neither is ".git" (regular repo).
-	if [[ -z $info[branch] && -z $info[top] ]]; then
+	if [[ -z $info[branch] ]]; then
 		local git_dir git_common_dir is_bare
 		git_dir=$(command git rev-parse --git-dir 2>/dev/null)
 		git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
