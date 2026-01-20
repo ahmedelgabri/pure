@@ -301,14 +301,17 @@ prompt_pure_async_vcs_info() {
 	# At a worktree root (parent of worktrees), we want to show a symbol instead of branch.
 	# Detection: bare repo where git-dir == git-common-dir but neither is ".git" (regular repo).
 	# Note: vcs_info may still return the bare repo's HEAD branch, so we check regardless.
-	local git_dir git_common_dir is_bare
-	git_dir=$(command git rev-parse --git-dir 2>/dev/null)
-	git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
+	# Optimization: check is_bare first (cheap), only run other checks if needed.
+	local is_bare
 	is_bare=$(command git rev-parse --is-bare-repository 2>/dev/null)
 
-	if [[ -n $git_dir && -n $git_common_dir ]]; then
-		# Worktree root: bare repo with git_dir == git_common_dir but not ".git"
-		if [[ $is_bare == "true" && $git_dir == $git_common_dir && $git_dir != ".git" ]]; then
+	if [[ $is_bare == "true" ]]; then
+		local git_dir git_common_dir
+		git_dir=$(command git rev-parse --git-dir 2>/dev/null)
+		git_common_dir=$(command git rev-parse --git-common-dir 2>/dev/null)
+
+		# Worktree root: git_dir == git_common_dir but not ".git"
+		if [[ -n $git_dir && $git_dir == $git_common_dir && $git_dir != ".git" ]]; then
 			info[top]=$PWD
 			info[branch]=
 			info[worktree_root]=1
